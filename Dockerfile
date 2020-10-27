@@ -1,5 +1,6 @@
 ARG TAG="task-dispatcher"
-FROM osrf/rmf_core:$TAG
+# FROM osrf/rmf_core:$TAG
+FROM tanyouliang95/rmf_core:$TAG
 
 ENV HOME /home/ws_rmf/
 

@@ -20,6 +20,7 @@
 
 #include <rmf_task_msgs/srv/submit_task.hpp>
 #include <rmf_task_msgs/srv/cancel_task.hpp>
+#include <rmf_task_msgs/srv/get_task.hpp>
 
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
@@ -30,6 +31,7 @@
 //==============================================================================
 using SubmitTaskSrv = rmf_task_msgs::srv::SubmitTask;
 using CancelTaskSrv = rmf_task_msgs::srv::CancelTask;
+using GetTaskSrv = rmf_task_msgs::srv::GetTask;
 
 //==============================================================================
 using bsoncxx::builder::stream::close_array;
@@ -126,11 +128,7 @@ private:
 //==============================================================================
 int main(int argc, char* argv[])
 {
-  rclcpp::init(argc, argv);
-
   std::cout << "~Initializing Dispatcher DB Node~" << std::endl;
-
-  MongoStatusClient task_db_conn;
 
   auto dispatcher = rmf_task_ros2::dispatcher::Dispatcher::make(
     "rmf_dispatcher_node");
@@ -170,6 +168,32 @@ int main(int argc, char* argv[])
     }
   );
 
+  auto get_task_srv = node->create_service<GetTaskSrv>(
+    rmf_task_ros2::GetTaskSrvName,
+    [&dispatcher, &node](
+      const std::shared_ptr<GetTaskSrv::Request> request,
+      std::shared_ptr<GetTaskSrv::Response> response)
+    {
+      auto ids = request->task_id;
+      // currently return all tasks
+      for (auto task : *dispatcher->active_tasks())
+        response->active_tasks.push_back(
+          rmf_task_ros2::convert(*(task.second)));
+
+      for (auto task : *dispatcher->terminated_tasks())
+        response->terminated_tasks.push_back(
+          rmf_task_ros2::convert(*(task.second)));
+
+      RCLCPP_WARN(node->get_logger(), "Get Task!!! Totalling %d active | %d done",
+      dispatcher->active_tasks()->size(),
+      dispatcher->terminated_tasks()->size());
+      response->success = true;
+    }
+  );
+
+  // start mongo db client instance
+  MongoStatusClient task_db_conn;
+
   dispatcher->on_change(
     [&task_db_conn](const rmf_task_ros2::TaskStatusPtr status)
     {
@@ -184,5 +208,4 @@ int main(int argc, char* argv[])
   dispatcher->spin();
 
   RCLCPP_INFO(node->get_logger(), "Closing down task dispatcher node");
-  rclcpp::shutdown();
 }
