@@ -6,6 +6,8 @@ And this will also define clear REST Interface to submit a task.
 
 **Minimal Example: Work in Progress**
 
+---
+
 ## Installation
 
 Installation of `mongocxx`: 
@@ -15,9 +17,16 @@ Installation of `mongocxx`:
 Setup a MongoDB
 
 ## Run Nodes
+Make sure a local mongodb exists
 
+### 1) Update Task States
 ```bash
 ros2 run rmf_task_ros2 dispatcher_db_client
+```
+
+### 2) Update fleet states
+```bash
+python scripts/fleet_states_db_updater.py
 ```
 
 **Docker**
@@ -28,7 +37,6 @@ github registry ("packages" on the right panel).
 # Srv Dispatcher 
 docker run -it tanyouliang95/rmf_core:web-server \
 ros2 run rmf_task_ros2 rmf_task_dispatcher
-
 # Srv Dispatcher with DB connnection
 docker run -it --network host tanyouliang95/rmf_core:web-server \
 ros2 run rmf_web_server dispatcher_db_client
