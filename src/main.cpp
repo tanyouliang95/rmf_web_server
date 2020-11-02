@@ -129,6 +129,7 @@ private:
 int main(int argc, char* argv[])
 {
   std::cout << "~Initializing Dispatcher DB Node~" << std::endl;
+  rclcpp::init(argc, argv);
 
   auto dispatcher = rmf_task_ros2::dispatcher::Dispatcher::make(
     "rmf_dispatcher_node");

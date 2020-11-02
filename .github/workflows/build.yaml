@@ -1,0 +1,12 @@
+name: build-test
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    container:
+      image: docker://ros:foxy-ros-base-focal     
+    steps:
+    - name: deps
+      run: |
+        sudo apt update
+        sudo apt install -y g++-8
