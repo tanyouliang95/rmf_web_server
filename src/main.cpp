@@ -63,14 +63,14 @@ public:
 
     bsoncxx::builder::stream::document document{};
     document << "_id" << status.task_profile.task_id;
-    document << "task_type" << (int)status.task_profile.task_type;
+    document << "task_type" << (int)status.task_profile.task_type.type;
     document << "submission_time"  // time conversion! todo
              << bsoncxx::types::b_date{std::chrono::system_clock::now()};
 
-    document << "params" << open_document;
-    for (auto param : status.task_profile.params)
-      document << param.first << param.second;
-    document << close_document;
+    // document << "params" << open_document;
+    // for (auto param : status.task_profile.params)
+    //   document << param.first << param.second;
+    // document << close_document;
 
     document << "fleet_name" << status.fleet_name;
     document << "robot_name" << status.robot_name;
@@ -144,13 +144,43 @@ int main(int argc, char* argv[])
       std::shared_ptr<SubmitTaskSrv::Response> response)
     {
       // convert
-      rmf_task_ros2::TaskProfileMsg msg;
-      msg.type = request->type;
-      msg.start_time = request->start_time;
-      msg.params = request->params;
+      rmf_task_ros2::TaskProfile task_profile;
+      task_profile.task_type = request->task_type;
+      task_profile.start_time = request->start_time;
+      task_profile.clean = request->clean;
+      task_profile.delivery = request->delivery;
+      task_profile.station = request->station;
 
-      auto id = dispatcher->submit_task(rmf_task_ros2::convert(msg));
-      RCLCPP_WARN(node->get_logger(), "Submit New Task!!! ID %s", id.c_str());
+      auto id = dispatcher->submit_task(task_profile);
+
+      switch (request->evaluator)
+      {
+        using namespace rmf_task_ros2::bidding;
+        case SubmitTaskSrv::Request::LOWEST_DIFF_COST_EVAL:
+        {
+          auto eval = std::shared_ptr<LeastFleetDiffCostEvaluator>(
+            new LeastFleetDiffCostEvaluator());
+          dispatcher->evaluator(eval);
+          break;
+        }
+        case SubmitTaskSrv::Request::LOWEST_COST_EVAL:
+        {
+          auto eval = std::shared_ptr<LeastFleetCostEvaluator>(
+            new LeastFleetCostEvaluator());
+          dispatcher->evaluator(eval);
+          break;
+        }
+        case SubmitTaskSrv::Request::QUICKEST_FINISH_EVAL:
+        {
+          auto eval = std::shared_ptr<QuickestFinishEvaluator>(
+            new QuickestFinishEvaluator());
+          dispatcher->evaluator(eval);
+          break;
+        }
+      }
+
+      std::cout << " Generated ID is: " << id << std::endl;
+
       response->task_id = id;
       response->success = true;
     }
