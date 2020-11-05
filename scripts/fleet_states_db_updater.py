@@ -29,6 +29,7 @@ myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 mydb = myclient["rmf_task"]
 mycol = mydb["fleet_states"]
 
+################################################################################
 
 class FleetStateListener(Node):
     def __init__(self):
@@ -51,22 +52,21 @@ class FleetStateListener(Node):
         print(f" Update DB with: {len(self.fleet_states_dict)} fleets")
 
         for fleet_name, robot_states in self.fleet_states_dict.items():
-            query = {"fleet_name": fleet_name}
-            robots = self.convert_msg(robot_states)
+            robots = self.convert_msg(fleet_name, robot_states)
+            for bot in robots:
+                query = {"robot_name": bot["robot_name"]}
+                if (mycol.find_one(query) == None):
+                    mycol.insert_one(bot)
+                else:
+                    values = {"$set": bot}
+                    mycol.update_one(query, values)
 
-            if (mycol.find_one(query) == None):
-                mydict = {"fleet_name": fleet_name, "robots": robots}
-                mycol.insert_one(mydict)
-            else:
-                values = {"$set": {"robots": robots}}
-                mycol.update_one(query, values)
-
-    def convert_msg(self, robot_states):
-        
+    def convert_msg(self, fleet_name, robot_states):
         bots = []
         for bot in robot_states:
             state = {}
-            state["name"] = bot.name
+            state["robot_name"] = bot.name
+            state["fleet_name"] = fleet_name
             state["mode"] = bot.mode.mode
             state["battery_percent:"] = bot.battery_percent
             # time is missing here
@@ -75,7 +75,6 @@ class FleetStateListener(Node):
             state["location_yaw:"] = bot.location.yaw
             state["level_name:"] = bot.location.yaw
             bots.append(state)
-
         return bots
 
 ################################################################################
