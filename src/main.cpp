@@ -16,11 +16,11 @@
 */
 
 #include <rclcpp/rclcpp.hpp>
-#include <rmf_task_ros2/dispatcher/Dispatcher.hpp>
+#include <rmf_task_ros2/Dispatcher.hpp>
 
 #include <rmf_task_msgs/srv/submit_task.hpp>
 #include <rmf_task_msgs/srv/cancel_task.hpp>
-#include <rmf_task_msgs/srv/get_task.hpp>
+#include <rmf_task_msgs/srv/get_task_list.hpp>
 
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
@@ -31,7 +31,7 @@
 //==============================================================================
 using SubmitTaskSrv = rmf_task_msgs::srv::SubmitTask;
 using CancelTaskSrv = rmf_task_msgs::srv::CancelTask;
-using GetTaskSrv = rmf_task_msgs::srv::GetTask;
+using GetTaskListSrv = rmf_task_msgs::srv::GetTaskList;
 
 //==============================================================================
 using bsoncxx::builder::stream::close_array;
@@ -63,7 +63,8 @@ public:
 
     bsoncxx::builder::stream::document document{};
     document << "_id" << status.task_profile.task_id;
-    document << "task_type" << (int)status.task_profile.task_type.type;
+    document << "task_type" 
+             << (int)status.task_profile.description.task_type.type;
     document << "submission_time"  // time conversion! todo
              << bsoncxx::types::b_date{std::chrono::system_clock::now()};
 
@@ -131,96 +132,11 @@ int main(int argc, char* argv[])
   std::cout << "~Initializing Dispatcher DB Node~" << std::endl;
   rclcpp::init(argc, argv);
 
-  auto dispatcher = rmf_task_ros2::dispatcher::Dispatcher::make(
+  auto dispatcher = rmf_task_ros2::Dispatcher::make_node(
     "rmf_dispatcher_node");
 
   const auto& node = dispatcher->node();
   RCLCPP_INFO(node->get_logger(), "Starting task dispatcher node");
-
-  auto submit_task_srv = node->create_service<SubmitTaskSrv>(
-    rmf_task_ros2::SubmitTaskSrvName,
-    [&dispatcher, &node](
-      const std::shared_ptr<SubmitTaskSrv::Request> request,
-      std::shared_ptr<SubmitTaskSrv::Response> response)
-    {
-      // convert
-      rmf_task_ros2::TaskProfile task_profile;
-      task_profile.task_type = request->task_type;
-      task_profile.start_time = request->start_time;
-      task_profile.clean = request->clean;
-      task_profile.delivery = request->delivery;
-      task_profile.station = request->station;
-
-      auto id = dispatcher->submit_task(task_profile);
-
-      switch (request->evaluator)
-      {
-        using namespace rmf_task_ros2::bidding;
-        case SubmitTaskSrv::Request::LOWEST_DIFF_COST_EVAL:
-        {
-          auto eval = std::shared_ptr<LeastFleetDiffCostEvaluator>(
-            new LeastFleetDiffCostEvaluator());
-          dispatcher->evaluator(eval);
-          break;
-        }
-        case SubmitTaskSrv::Request::LOWEST_COST_EVAL:
-        {
-          auto eval = std::shared_ptr<LeastFleetCostEvaluator>(
-            new LeastFleetCostEvaluator());
-          dispatcher->evaluator(eval);
-          break;
-        }
-        case SubmitTaskSrv::Request::QUICKEST_FINISH_EVAL:
-        {
-          auto eval = std::shared_ptr<QuickestFinishEvaluator>(
-            new QuickestFinishEvaluator());
-          dispatcher->evaluator(eval);
-          break;
-        }
-      }
-
-      std::cout << " Generated ID is: " << id << std::endl;
-
-      response->task_id = id;
-      response->success = true;
-    }
-  );
-
-  auto cancel_task_srv = node->create_service<CancelTaskSrv>(
-    rmf_task_ros2::CancelTaskSrvName,
-    [&dispatcher, &node](
-      const std::shared_ptr<CancelTaskSrv::Request> request,
-      std::shared_ptr<CancelTaskSrv::Response> response)
-    {
-      auto id = request->task_id;
-      std::cout << "\n";
-      RCLCPP_WARN(node->get_logger(), "Cancel Task!!! ID %s", id.c_str());
-      response->success = dispatcher->cancel_task(id);
-    }
-  );
-
-  auto get_task_srv = node->create_service<GetTaskSrv>(
-    rmf_task_ros2::GetTaskSrvName,
-    [&dispatcher, &node](
-      const std::shared_ptr<GetTaskSrv::Request> request,
-      std::shared_ptr<GetTaskSrv::Response> response)
-    {
-      auto ids = request->task_id;
-      // currently return all tasks
-      for (auto task : *dispatcher->active_tasks())
-        response->active_tasks.push_back(
-          rmf_task_ros2::convert(*(task.second)));
-
-      for (auto task : *dispatcher->terminated_tasks())
-        response->terminated_tasks.push_back(
-          rmf_task_ros2::convert(*(task.second)));
-
-      RCLCPP_WARN(node->get_logger(), "Get Task!!! Totalling %d active | %d done",
-      dispatcher->active_tasks()->size(),
-      dispatcher->terminated_tasks()->size());
-      response->success = true;
-    }
-  );
 
   // start mongo db client instance
   MongoStatusClient task_db_conn;
